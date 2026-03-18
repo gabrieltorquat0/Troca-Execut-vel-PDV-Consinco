@@ -1,0 +1,43 @@
+class function TDeployManager.DeployLinux(
+  const IP, Usuario, Senha,
+  ArquivoLocal,
+  Empresa,
+  PDV,
+  Versao: string): string;
+var
+  Cmd: string;
+  PastaBackup: string;
+  EmpresaNum: string;
+  PDVNum: string;
+  Executavel: string;
+  WinSCPPath: string;
+begin
+
+  EmpresaNum := ExtrairNumero(Empresa);
+  PDVNum := ExtrairNumero(PDV);
+
+  PastaBackup :=
+    ExtractFilePath(ParamStr(0))+
+    'backup\loja'+EmpresaNum+
+    '\pdv'+PDVNum+'\';
+
+  ForceDirectories(PastaBackup);
+
+  Executavel := '/c5client/AcruxPDV/AcruxPDV.exe';
+
+  WinSCPPath := ExtractFilePath(ParamStr(0))+'winscp.com';
+
+  Cmd :=
+  '"'+WinSCPPath+'" /command '+
+  '"open scp://'+Usuario+':'+Senha+'@'+IP+'" '+
+  '"get '+Executavel+' "'+
+  PastaBackup+'AcruxPDV_backup.exe"" '+
+  '"put "'+ArquivoLocal+'" '+Executavel+'" '+
+  '"exit"';
+
+  if ExecutarCmd(Cmd) then
+    Result := 'OK'
+  else
+    Result := 'ERRO';
+
+end;

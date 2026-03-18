@@ -1,0 +1,123 @@
+unit Login;
+
+interface
+
+uses
+  Winapi.Windows,
+  Winapi.Messages,
+  System.SysUtils,
+  System.Classes,
+  System.IOUtils,
+  System.Variants,
+  Vcl.Graphics,
+  Vcl.Controls,
+  Vcl.Forms,
+  Vcl.Dialogs,
+  Vcl.Menus,
+  Vcl.StdCtrls,
+  Vcl.ExtCtrls,
+  Vcl.DBGrids;
+
+type
+
+  TFrmLogin = class(TForm)
+    PanelLogin: TPanel;
+    EditUsuario: TEdit;
+    EditSenha: TEdit;
+    ComboBox1: TComboBox;
+    ButtonConectar: TButton;
+    procedure ButtonConectarClick(Sender: TObject);
+  private
+    { Private declarations }
+        procedure ListarTNS;
+    function ObterTnsAdmin: string;
+  public
+    { Public declarations }
+  end;
+
+var
+  FrmLogin: TFrmLogin;
+
+implementation
+
+{$R *.dfm}
+
+uses Menu, ModuloOracle;
+
+
+{ ================= TNS ================= }
+
+function TFrmLogin.ObterTnsAdmin: string;
+begin
+  Result := GetEnvironmentVariable('TNS_ADMIN');
+end;
+
+procedure TFrmLogin.ListarTNS;
+var
+  SL: TStringList;
+  Linha, TNS, Arquivo: string;
+  I: Integer;
+begin
+  ComboBox1.Items.Clear;
+
+  Arquivo := IncludeTrailingPathDelimiter(ObterTnsAdmin) + 'tnsnames.ora';
+
+  if not FileExists(Arquivo) then
+    Exit;
+
+  SL := TStringList.Create;
+  try
+    SL.LoadFromFile(Arquivo);
+
+    for I := 0 to SL.Count - 1 do
+    begin
+      Linha := Trim(SL[I]);
+
+      if (Linha = '') or Linha.StartsWith('#') then
+        Continue;
+
+      if (not Linha.StartsWith('(')) and (Pos('=', Linha) > 0) then
+      begin
+        TNS := Trim(Copy(Linha, 1, Pos('=', Linha) - 1));
+        ComboBox1.Items.Add(TNS);
+      end;
+    end;
+
+    if ComboBox1.Items.Count > 0 then
+      ComboBox1.ItemIndex := 0;
+
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TFrmLogin.ButtonConectarClick(Sender: TObject);
+begin
+
+  if not Assigned(dm) then
+    dm := Tdm.Create(Application);
+    // create form aqui so pra teste em maquina sem oracle client, comentar ao compilar
+    Application.CreateForm(TFrmMenu, FrmMenu);
+    FrmMenu.Show;
+
+  try
+    Dm.ConectarOracle(
+      ComboBox1.Text,
+      EditUsuario.Text,
+      EditSenha.Text
+    );
+
+
+    Application.CreateForm(TFrmMenu, FrmMenu);
+    FrmMenu.Show;
+
+    // Fecha login
+    Self.Close;
+
+  except
+    on E: Exception do
+      ShowMessage('Erro ao conectar: ' + E.Message);
+  end;
+end;
+
+end.

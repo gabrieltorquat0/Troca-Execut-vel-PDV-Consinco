@@ -1,0 +1,213 @@
+unit ModuloOracle;
+
+interface
+
+uses
+  System.SysUtils,
+  System.Classes,
+  System.Threading,
+  System.SyncObjs,
+  Winapi.Windows,
+  Winapi.Winsock,
+  Data.DB,
+  Vcl.Forms,                // <<< OBRIGATÓRIO
+  FireDAC.Comp.Client,
+  FireDAC.Comp.DataSet,
+  FireDAC.Phys,
+  FireDAC.Phys.Oracle,
+  FireDAC.Phys.OracleDef,
+  FireDAC.Stan.Intf,
+  FireDAC.Stan.Option,
+  FireDAC.Stan.Error,
+  FireDAC.UI.Intf,
+  FireDAC.VCLUI.Wait,
+  FireDAC.Phys.Intf,
+  FireDAC.Stan.Def,
+  FireDAC.Stan.Pool,
+  FireDAC.Stan.Async,
+  FireDAC.Stan.Param,
+  FireDAC.DatS,
+  FireDAC.DApt.Intf,
+  FireDAC.DApt, FireDAC.Phys.MySQL, FireDAC.Phys.MySQLDef, Vcl.Dialogs;
+
+
+type
+  TDmOra = class(TDataModule)
+    FDConnection1: TFDConnection;
+    FDQuery1: TFDQuery;
+private
+    FOracleDriver: TFDPhysOracleDriverLink;
+  public
+    procedure ConectarOracle(
+      const ADatabase, AUsuario, ASenha: string
+    );
+
+    //procedure ProcessarPDVs(const ASOSelecionado: string);
+
+    function IPOnline(const AIP: string): Boolean;
+  end;
+
+var
+  DmOra: TdmOra;
+
+implementation
+
+// conectar banco oracle
+procedure TdmOra.ConectarOracle(
+  const ADatabase, AUsuario, ASenha: string
+);
+begin
+  FDConnection1.Close;
+  FDConnection1.Params.Clear;
+
+  if not Assigned(FOracleDriver) then
+    FOracleDriver := TFDPhysOracleDriverLink.Create(Self);
+
+  FDConnection1.DriverName := 'Ora';
+  FDConnection1.Params.Database := ADatabase;
+  FDConnection1.Params.UserName := AUsuario;
+  FDConnection1.Params.Password := ASenha;
+  FDConnection1.Params.Values['CharacterSet'] := 'UTF8';
+
+  FDConnection1.LoginPrompt := False;
+  FDConnection1.Connected := True;
+end;
+
+// validar conexao ip
+function TdmOra.IPOnline(const AIP: string): Boolean;
+var
+  WSAData: TWSAData;
+  Sock: TSocket;
+  Addr: TSockAddrIn;
+begin
+  Result := False;
+
+  if WSAStartup($0202, WSAData) <> 0 then Exit;
+
+  try
+    Sock := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if Sock = INVALID_SOCKET then Exit;
+
+    Addr.sin_family := AF_INET;
+    Addr.sin_port := htons(3306);
+    Addr.sin_addr.S_addr := inet_addr(PAnsiChar(AnsiString(AIP)));
+
+    if connect(Sock, Addr, SizeOf(Addr)) = 0 then
+      Result := True;
+
+    closesocket(Sock);
+  finally
+    WSACleanup;
+  end;
+end;
+
+// retornar pdvs
+
+//procedure Tdm.ProcessarPDVs(const ASOSelecionado: string);
+//var
+//  ListaIPs: TArray<string>;
+//  ListaSO: TArray<string>;
+//  I: Integer;
+//  Semaphore: TSemaphore;
+//begin
+//  QueryIPs.Close;
+//  FDConnection.Connected := True;
+//  QueryIPs.ParamByName('STATUS').AsString := 'S';
+//  QueryIPs.ParamByName('SO').AsString := ASOSelecionado;
+//  QueryIPs.Open;
+//
+//  SetLength(ListaIPs, QueryIPs.RecordCount);
+//  SetLength(ListaSO, QueryIPs.RecordCount);
+//
+//  I := 0;
+//  while not QueryIPs.Eof do
+//  begin
+//    ListaIPs[I] := QueryIPs.FieldByName('ip').AsString;
+//    ListaSO[I] := QueryIPs.FieldByName('so').AsString;
+//    Inc(I);
+//    QueryIPs.Next;
+//  end;
+//
+//  if not Assigned(dmMySQL) then
+//    dmMySQL := TdmMySQL.Create(nil);
+//
+//  dmMySQL.MemResultado.EmptyDataSet;
+//
+//  Semaphore := TSemaphore.Create(nil, 10, 10, '');
+//
+//  TParallel.For(0, High(ListaIPs),
+//    procedure(Index: Integer)
+//    var
+//      Conn: TFDConnection;
+//      Qry: TFDQuery;
+//    begin
+//      Semaphore.Acquire;
+//      try
+//        if not IPOnline(ListaIPs[Index]) then
+//        begin
+//          TThread.Queue(nil,
+//            procedure
+//            begin
+//              dmMySQL.MemResultado.Append;
+//              dmMySQL.MemResultado.FieldByName('IP').AsString :=
+//                ListaIPs[Index];
+//              dmMySQL.MemResultado.Post;
+//            end);  // ? FECHAMENTO CORRETO
+//          Exit;
+//        end;
+//
+//        Conn := TFDConnection.Create(nil);
+//        Qry := TFDQuery.Create(nil);
+//
+//        try
+//          Conn.DriverName := 'MySQL';
+//          Conn.Params.Values['Server'] := ListaIPs[Index];
+//          Conn.Params.Values['Database'] := 'consinco';
+//          Conn.Params.Values['User_Name'] := 'consinco';
+//          Conn.Params.Values['Password'] := 'consinco';
+//          Conn.Params.Values['Port'] := '3306';
+//          Conn.Params.Values['LoginTimeout'] := '5';
+//          Conn.LoginPrompt := False;
+//          Conn.Connected := True;
+//
+//          Qry.Connection := Conn;
+//
+//          if ASOSelecionado = 'L' then
+//            Qry.SQL.Text := 'SELECT * FROM tb_parametro WHERE grupo = "DFeWebService" AND parametro = "Ambiente" AND valor = "taHomologacao"'
+//          else
+//            Qry.SQL.Text := 'SELECT * FROM tb_parametro WHERE grupo = "DFeWebService" AND parametro = "Ambiente" AND valor = "taHomologacao"';
+//
+//          Qry.Open;
+//
+//          while not Qry.Eof do
+//          begin
+//            TThread.Queue(nil,
+//              procedure
+//              begin
+//                dmMySQL.MemResultado.Append;
+//                dmMySQL.MemResultado.FieldByName('IP').AsString :=
+//                  ListaIPs[Index];
+//                dmMySQL.MemResultado.Post;
+//              end);  // ? FECHAMENTO CORRETO
+//
+//            Qry.Next;
+//          end;
+//
+//        finally
+//          Qry.Free;
+//          Conn.Free;
+//        end;
+//
+//      finally
+//        Semaphore.Release;
+//      end;
+//    end);
+//
+//  Semaphore.Free;
+//
+//  ShowMessage('Processamento concluído.');
+//end;
+
+end.
+
+end.

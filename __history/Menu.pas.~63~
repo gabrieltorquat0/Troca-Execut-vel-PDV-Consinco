@@ -1,0 +1,333 @@
+unit Menu;
+
+interface
+
+uses
+  Winapi.Windows,
+  System.SysUtils,
+  System.Classes,
+  System.Threading,
+  System.Generics.Collections,
+  Vcl.Forms,
+  Vcl.Controls,
+  Vcl.StdCtrls,
+  Vcl.ComCtrls,
+  Vcl.Dialogs,
+  Vcl.ExtCtrls,
+  Vcl.ImgList,
+  Vcl.Graphics,
+  ModuloOracle, System.ImageList;
+
+type
+  TFrmMenu = class(TForm)
+    TreeView1: TTreeView;
+    btnCarregar: TButton;
+    btnSelecionarExe: TButton;
+    btnExecutar: TButton;
+    MemoLog: TMemo;
+    ProgressBar1: TProgressBar;
+    OpenDialog: TOpenDialog;
+    lblArquivoSelecionado: TLabel;
+    Panel1: TPanel;
+    Panel2: TPanel;
+    Panel3: TPanel;
+    ImageListStatus: TImageList;
+
+    procedure FormCreate(Sender: TObject);
+    procedure FormShow(Sender: TObject);
+    procedure btnSelecionarExeClick(Sender: TObject);
+    procedure btnExecutarClick(Sender: TObject);
+    procedure btnCarregarClick(Sender: TObject);
+
+  private
+    function PingPDV(const IP: string): Boolean;
+    procedure Log(const Msg: string);
+    function CriarCirculo(Cor: TColor; Tamanho: Integer): TBitmap;
+  public
+    procedure CarregarEmpresas;
+  end;
+
+var
+  FrmMenu: TFrmMenu;
+
+implementation
+
+{$R *.dfm}
+
+uses DeployManager;
+
+function TFrmMenu.CriarCirculo(Cor: TColor; Tamanho: Integer): TBitmap;
+begin
+  Result := TBitmap.Create;
+  Result.SetSize(Tamanho,Tamanho);
+
+  Result.Canvas.Brush.Color := clWhite;
+  Result.Canvas.FillRect(Rect(0,0,Tamanho,Tamanho));
+
+  Result.Canvas.Brush.Color := Cor;
+  Result.Canvas.Pen.Style := psClear;
+
+  Result.Canvas.Ellipse(2,2,Tamanho-2,Tamanho-2);
+end;
+
+procedure TFrmMenu.FormCreate(Sender: TObject);
+var
+  bmp: TBitmap;
+begin
+
+  ImageListStatus := TImageList.Create(Self);
+
+  ImageListStatus.Width := 16;
+  ImageListStatus.Height := 16;
+
+  bmp := CriarCirculo(clLime,16);
+  ImageListStatus.Add(bmp,nil);
+  bmp.Free;
+
+  bmp := CriarCirculo(clRed,16);
+  ImageListStatus.Add(bmp,nil);
+  bmp.Free;
+
+  TreeView1.Images := ImageListStatus;
+
+end;
+
+procedure TFrmMenu.FormShow(Sender: TObject);
+begin
+  CarregarEmpresas;
+end;
+
+procedure TFrmMenu.btnSelecionarExeClick(Sender: TObject);
+begin
+  if OpenDialog.Execute then
+    lblArquivoSelecionado.Caption := OpenDialog.FileName;
+end;
+
+procedure TFrmMenu.btnCarregarClick(Sender: TObject);
+begin
+  CarregarEmpresas;
+end;
+
+function TFrmMenu.PingPDV(const IP: string): Boolean;
+var
+  SI: TStartupInfo;
+  PI: TProcessInformation;
+  ExitCode: Cardinal;
+  Cmd: string;
+begin
+
+  Result := False;
+
+  ZeroMemory(@SI,SizeOf(SI));
+  SI.cb := SizeOf(SI);
+
+  Cmd := Format('cmd.exe /C ping -n 1 -w 500 %s > nul',[IP]);
+
+  if CreateProcess(nil,PChar(Cmd),nil,nil,false,CREATE_NO_WINDOW,nil,nil,SI,PI) then
+  begin
+
+    WaitForSingleObject(PI.hProcess,INFINITE);
+
+    GetExitCodeProcess(PI.hProcess,ExitCode);
+
+    Result := ExitCode=0;
+
+    CloseHandle(PI.hProcess);
+    CloseHandle(PI.hThread);
+
+  end;
+
+end;
+
+procedure TFrmMenu.CarregarEmpresas;
+var
+  NodeEmpresa, NodePDV: TTreeNode;
+  EmpresaAtual: string;
+  IP,SO,Versao,Checkout: string;
+begin
+
+  TreeView1.Items.BeginUpdate;
+  TreeView1.Items.Clear;
+
+  Dm.CarregarPDVs;
+
+  EmpresaAtual := '';
+
+  while not Dm.QueryPDVs.Eof do
+  begin
+
+    if EmpresaAtual <> Dm.QueryPDVs.FieldByName('nroempresa').AsString then
+    begin
+      EmpresaAtual := Dm.QueryPDVs.FieldByName('nroempresa').AsString;
+
+      NodeEmpresa := TreeView1.Items.Add(nil,'Empresa '+EmpresaAtual);
+
+      NodeEmpresa.ImageIndex := -1;
+      NodeEmpresa.SelectedIndex := -1;
+    end;
+
+    IP := Dm.QueryPDVs.FieldByName('ip').AsString;
+    SO := Dm.QueryPDVs.FieldByName('so').AsString;
+    Versao := Dm.QueryPDVs.FieldByName('versaoaplicacao').AsString;
+    Checkout := Dm.QueryPDVs.FieldByName('nrocheckout').AsString;
+
+    if Versao.Trim='' then
+      Versao := 'SEM_VERSAO';
+
+    NodePDV :=
+      TreeView1.Items.AddChild(
+        NodeEmpresa,
+        Format('PDV %s (%s) (%s) - (%s)',
+        [Checkout,SO,Versao,IP])
+      );
+
+    NodePDV.Data :=
+      Pointer(StrNew(PChar(IP+'|'+SO+'|'+Versao)));
+
+    NodePDV.ImageIndex := -1;
+    NodePDV.SelectedIndex := -1;
+
+    TThreadPool.Default.QueueWorkItem(
+      procedure
+      var
+        Online: Boolean;
+      begin
+
+        Online := PingPDV(IP);
+
+        TThread.Synchronize(nil,
+        procedure
+        begin
+
+        if Online then
+        begin
+          NodePDV.ImageIndex := 0;
+          NodePDV.SelectedIndex := 0;
+        end
+        else
+        begin
+          NodePDV.ImageIndex := 1;
+          NodePDV.SelectedIndex := 1;
+        end;
+
+        TreeView1.Invalidate;
+
+        end);
+
+      end);
+
+    Dm.QueryPDVs.Next;
+
+  end;
+
+  TreeView1.Items.EndUpdate;
+
+  TreeView1.FullExpand;
+
+end;
+
+procedure TFrmMenu.btnExecutarClick(Sender: TObject);
+var
+  I: Integer;
+  Node: TTreeNode;
+  Dados: string;
+  IP,SO,Versao: string;
+  NodesSelecionados: TList<TTreeNode>;
+begin
+
+  NodesSelecionados := TList<TTreeNode>.Create;
+
+  try
+
+    for I := 0 to TreeView1.Items.Count-1 do
+      if (TreeView1.Items[I].Level=1) and (TreeView1.Items[I].Checked) then
+        NodesSelecionados.Add(TreeView1.Items[I]);
+
+    ProgressBar1.Max := NodesSelecionados.Count;
+    ProgressBar1.Position := 0;
+
+    for Node in NodesSelecionados do
+    begin
+
+      Dados := string(PChar(Node.Data));
+
+      IP := Copy(Dados,1,Pos('|',Dados)-1);
+      Delete(Dados,1,Pos('|',Dados));
+
+      SO := Copy(Dados,1,Pos('|',Dados)-1);
+      Delete(Dados,1,Pos('|',Dados));
+
+      Versao := Dados;
+
+      TThreadPool.Default.QueueWorkItem(
+        procedure
+        var
+          Res: string;
+          Checkout: string;
+        begin
+
+          try
+
+            if SO='L' then
+              Res := TDeployManager.DeployLinux(
+                IP,
+                'root',
+                'consinco',
+                lblArquivoSelecionado.Caption,
+                Node.Parent.Text,
+                Node.Text,
+                Versao)
+            else
+              Res := 'ERRO';
+
+            TThread.Synchronize(nil,
+            procedure
+            begin
+
+              Checkout := Copy(Node.Text,5,Pos('(',Node.Text)-6);
+
+              if Res='OK' then
+                Node.Text :=
+                  Format('PDV %s (%s) (%s) OK - (%s)',
+                  [Checkout,SO,Versao,IP])
+              else
+                Node.Text :=
+                  Format('PDV %s (%s) (%s) ERRO - (%s)',
+                  [Checkout,SO,Versao,IP]);
+
+              ProgressBar1.Position :=
+                ProgressBar1.Position+1;
+
+            end);
+
+          except
+            on E:Exception do
+            begin
+
+              TThread.Synchronize(nil,
+              procedure
+              begin
+                Node.Text := Node.Text+' ERRO';
+                Log(IP+' -> '+E.Message);
+              end);
+
+            end;
+          end;
+
+        end);
+
+    end;
+
+  finally
+    NodesSelecionados.Free;
+  end;
+
+end;
+
+procedure TFrmMenu.Log(const Msg: string);
+begin
+  MemoLog.Lines.Add(
+  FormatDateTime('hh:nn:ss',Now)+' - '+Msg);
+end;
+
+end.

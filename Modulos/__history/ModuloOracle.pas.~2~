@@ -1,0 +1,58 @@
+unit ModuloOracle;
+
+interface
+
+uses
+  System.SysUtils,
+  System.Classes,
+  System.Threading,
+  System.SyncObjs,
+  Winapi.Windows,
+  Winapi.Winsock,
+  Data.DB,
+  Vcl.Forms,
+  FireDAC.Comp.Client,
+  FireDAC.Comp.DataSet,
+  FireDAC.Phys,
+  FireDAC.Phys.Oracle,
+  FireDAC.Phys.OracleDef,
+  FireDAC.Stan.Intf,
+  FireDAC.Stan.Option,
+  FireDAC.Stan.Error,
+  FireDAC.UI.Intf,
+  FireDAC.VCLUI.Wait,
+  FireDAC.Phys.Intf,
+  FireDAC.Stan.Def,
+  FireDAC.Stan.Pool,
+  FireDAC.Stan.Async,
+  FireDAC.Stan.Param,
+  FireDAC.DatS,
+  FireDAC.DApt.Intf,
+  FireDAC.DApt, FireDAC.Phys.MySQL, FireDAC.Phys.MySQLDef, Vcl.Dialogs;
+
+type
+  TdmOracle = class(TDataModule)
+    FDConnection: TFDConnection;
+    QueryIPs: TFDQuery;
+  private
+    FOracleDriver: TFDPhysOracleDriverLink;
+  public
+    procedure ConectarOracle(
+      const ADatabase, AUsuario, ASenha: string
+    );
+
+    procedure ProcessarPDVs(const ASOSelecionado: string);
+
+    function IPOnline(const AIP: string): Boolean;
+  end;
+
+var
+  dmOracle: TdmOracle;
+
+implementation
+
+{%CLASSGROUP 'Vcl.Controls.TControl'}
+
+{$R *.dfm}
+
+end.

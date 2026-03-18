@@ -1,0 +1,19 @@
+program TrocaExecutavelPDV;
+
+uses
+  Vcl.Forms,
+  Login in 'Login.pas' {FrmLogin},
+  Menu in 'Menu.pas' {FrmMenu},
+  ModuloOracle in 'ModuloOracle.pas' {Dm: TDataModule},
+  DeployManager in 'Deploy\DeployManager.pas';
+
+{$R *.res}
+
+begin
+  Application.Initialize;
+  Application.MainFormOnTaskbar := True;
+  Application.CreateForm(TFrmLogin, FrmLogin);
+  Application.CreateForm(TFrmMenu, FrmMenu);
+  Application.CreateForm(TDm, Dm);
+  Application.Run;
+end.

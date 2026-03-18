@@ -1,0 +1,15 @@
+# Delphi
+__history/
+__recovery/
+*.dcu
+*.exe
+*.dres
+*.map
+*.dcp
+*.bpl
+*.local
+*.identcache
+*.tvsconfig
+*.stat
+Win32/
+Win64/

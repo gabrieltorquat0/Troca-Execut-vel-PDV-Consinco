@@ -1,0 +1,82 @@
+unit ModuloOracle;
+
+interface
+
+uses
+  System.SysUtils,
+  System.Classes,
+  Data.DB,
+  Vcl.Dialogs,
+  FireDAC.Comp.Client,
+  FireDAC.Phys.Oracle,
+  FireDAC.Phys.OracleDef, FireDAC.Stan.Intf, FireDAC.Stan.Option,
+  FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
+  FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.VCLUI.Wait,
+  FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf, FireDAC.DApt,
+  FireDAC.Comp.DataSet;
+
+type
+  TDm = class(TDataModule)
+    FDConnection1: TFDConnection;
+    QueryPDVs: TFDQuery;
+    FDPhysOracleDriverLink1: TFDPhysOracleDriverLink;
+  public
+    procedure ConectarOracle(const ADatabase, AUsuario, ASenha: string);
+    procedure CarregarPDVs;
+  end;
+
+var
+  Dm: TDm;
+
+implementation
+
+{$R *.dfm}
+
+procedure TDm.ConectarOracle(const ADatabase, AUsuario, ASenha: string);
+begin
+  FDConnection1.Close;
+
+  FDConnection1.Params.Clear;
+  FDConnection1.DriverName := 'Ora';
+  FDConnection1.Params.Database := ADatabase;
+  FDConnection1.Params.UserName := AUsuario;
+  FDConnection1.Params.Password := ASenha;
+  FDConnection1.LoginPrompt := False;
+
+  FDConnection1.Connected := True;
+end;
+
+procedure TDm.CarregarPDVs;
+begin
+  QueryPDVs.Close;
+
+  QueryPDVs.SQL.Text :=
+    'SELECT nroempresa, ' +
+    '       nrocheckout, ' +
+    '       ip, ' +
+    '       so, ' +
+    '       versaoaplicacao ' +
+    'FROM ( ' +
+    '    SELECT b.nroempresa, ' +
+    '           b.nrocheckout, ' +
+    '           b.ip, ' +
+    '           b.so, ' +
+    '           a.versaoaplicacao, ' +
+    '           ROW_NUMBER() OVER ( ' +
+    '               PARTITION BY a.nroempresa, a.nrocheckout ' +
+    '               ORDER BY a.seqdocto DESC ' +
+    '           ) rn ' +
+    '    FROM tb_checkout b ' +
+    '    JOIN tb_docto a ' +
+    '      ON a.nroempresa = b.nroempresa ' +
+    '     AND a.nrocheckout = b.nrocheckout ' +
+    '     AND a.seqdocto < 1000000000 ' +
+    '    WHERE b.ativo = ''S''  ' +
+    ') ' +
+    'WHERE rn = 1 OR rn is NULL';
+
+  QueryPDVs.Open;
+end;
+
+end.
+
