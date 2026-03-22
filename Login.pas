@@ -19,20 +19,17 @@ uses
   Vcl.DBGrids;
 
 type
-
   TFrmLogin = class(TForm)
     PanelLogin: TPanel;
     EditUsuario: TEdit;
     EditSenha: TEdit;
     ComboBox1: TComboBox;
     ButtonConectar: TButton;
+    procedure FormCreate(Sender: TObject);
     procedure ButtonConectarClick(Sender: TObject);
   private
-    { Private declarations }
-        procedure ListarTNS;
+    procedure ListarTNS;
     function ObterTnsAdmin: string;
-  public
-    { Public declarations }
   end;
 
 var
@@ -42,10 +39,14 @@ implementation
 
 {$R *.dfm}
 
-uses Menu, ModuloOracle;
+uses
+  uTrocaExecutavelPDV,
+  ModuloOracle;
 
-
-{ ================= TNS ================= }
+procedure TFrmLogin.FormCreate(Sender: TObject);
+begin
+  ListarTNS;
+end;
 
 function TFrmLogin.ObterTnsAdmin: string;
 begin
@@ -54,38 +55,32 @@ end;
 
 procedure TFrmLogin.ListarTNS;
 var
-  SL: TStringList;
-  Linha, TNS, Arquivo: string;
-  I: Integer;
+  SL     : TStringList;
+  Linha  : string;
+  TNS    : string;
+  Arquivo: string;
+  I      : Integer;
 begin
   ComboBox1.Items.Clear;
-
   Arquivo := IncludeTrailingPathDelimiter(ObterTnsAdmin) + 'tnsnames.ora';
-
   if not FileExists(Arquivo) then
     Exit;
-
   SL := TStringList.Create;
   try
     SL.LoadFromFile(Arquivo);
-
     for I := 0 to SL.Count - 1 do
     begin
       Linha := Trim(SL[I]);
-
       if (Linha = '') or Linha.StartsWith('#') then
         Continue;
-
       if (not Linha.StartsWith('(')) and (Pos('=', Linha) > 0) then
       begin
         TNS := Trim(Copy(Linha, 1, Pos('=', Linha) - 1));
         ComboBox1.Items.Add(TNS);
       end;
     end;
-
     if ComboBox1.Items.Count > 0 then
       ComboBox1.ItemIndex := 0;
-
   finally
     SL.Free;
   end;
@@ -94,26 +89,30 @@ end;
 procedure TFrmLogin.ButtonConectarClick(Sender: TObject);
 begin
   try
-
     if not Assigned(dm) then
       dm := Tdm.Create(Application);
 
-    Dm.ConectarOracle(
+    dm.ConectarOracle(
       ComboBox1.Text,
       EditUsuario.Text,
       EditSenha.Text
     );
 
-    Application.CreateForm(TFrmMenu, FrmMenu);
-    FrmMenu.Show;
+    if not Assigned(frmTrocaExecutavel) then
+    begin
+      frmTrocaExecutavel := TfrmTrocaExecutavel.Create(Application);
+      frmTrocaExecutavel.Show;
+    end
+    else
+      frmTrocaExecutavel.Show;
 
-    Hide; // NÃO use close
+    // Oculta o login sem fechar o Application
+    Hide;
 
   except
     on E: Exception do
       ShowMessage('Erro ao conectar: ' + E.Message);
   end;
-
 end;
 
 end.
